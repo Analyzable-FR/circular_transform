@@ -29,6 +29,25 @@ import cv2
 import shapely
 
 
+class FastPiecewiseAffineTransform(PiecewiseAffineTransform):
+    def __call__(self, coords):
+        coords = np.asarray(coords)
+
+        simplex = self._tesselation.find_simplex(coords)
+
+        affines = np.array(
+            [self.affines[i].params for i in range(
+                len(self._tesselation.simplices))]
+        )[simplex]
+
+        pts = np.c_[coords, np.ones((coords.shape[0], 1))]
+
+        result = np.einsum("ij,ikj->ik", pts, affines)
+        result[simplex == -1, :] = -1
+
+        return result
+
+
 def transformation_function_linear(radius, dr, desired_radius):
     """
     Linear transformation function for modifying a contour into a circle.
@@ -127,13 +146,14 @@ def compute_radius_difference(
     return delta_r
 
 
-def circular_warp(grids, image, verbose=False):
+def circular_warp(grids, image, order=0, verbose=False):
     """
     Perform circular warp transformation on the image using grids.
 
     Parameters:
     - grids (list): List containing original and transformed grids.
     - image: Input image to be transformed.
+    - order: interpolation order see scipy.ndimage.map_coordinates.
     - verbose (bool): If True, display the transformed image.
 
     Returns:
@@ -141,9 +161,9 @@ def circular_warp(grids, image, verbose=False):
     """
     src = np.dstack(grids[0])[0]
     dst = np.dstack(grids[1])[0]
-    tform = PiecewiseAffineTransform()
+    tform = FastPiecewiseAffineTransform()
     tform.estimate(dst, src)
-    out = warp(image, tform)
+    out = warp(image, tform, order=order)
     if verbose:
         plt.imshow(out)
     return out

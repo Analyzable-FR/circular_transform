@@ -29,6 +29,7 @@ import numpy as np
 import shapely
 import sys
 import os
+import time
 
 # See https://medium.com/@bgallois/perfecting-imperfections-a-journey-in-warping-objects-into-circles-a0292e3c96ba
 # Open image
@@ -38,6 +39,9 @@ original = cv2.cvtColor(
             os.path.abspath(__file__)) +
         "/assets/orange.png"),
     cv2.COLOR_BGR2RGB)
+
+# Resize to very large for performance evaluation
+original = cv2.resize(original, (4000, 4000))
 
 # Find contour
 _, image = cv2.threshold(original, 254, 255, cv2.THRESH_BINARY_INV)
@@ -52,14 +56,17 @@ contours = shapely.LineString(contours)
 params = dict()
 params["number_radius"] = 15
 params["number_theta"] = 50
-params["max_radius"] = 600
+params["max_radius"] = original.shape[1]
 params["center"] = (int(original.shape[1] // 2), int(original.shape[0] // 2))
-params["desired_radius"] = 150
+params["desired_radius"] = original.shape[1] // 4
 
+start = time.time()
 dr = CT.compute_radius_difference(
     object_contour=contours, **params)
 grids = CT.get_transformation_grid(delta_r=dr, **params)
 output = CT.circular_warp(grids, original, verbose=True)
+print("Elapsed time: ", time.time() - start, " s")
+output = cv2.resize(output, (600, 600))
 cv2.imwrite(os.path.dirname(
     os.path.abspath(__file__)) +
     "/assets/orange_transformed.png", cv2.cvtColor(np.uint8(output * 255), cv2.COLOR_RGB2BGR))
